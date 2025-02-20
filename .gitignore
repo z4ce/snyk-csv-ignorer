@@ -51,7 +51,6 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 
-# CSV files (since this is a CSV processor, you might want to ignore sample/test files)
 *.csv
 # Uncomment the line above if you want to ignore all CSV files
 # Add specific CSV files you want to track with a ! prefix

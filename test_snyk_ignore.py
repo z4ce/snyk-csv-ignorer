@@ -98,5 +98,61 @@ class TestSnykIgnoreFunctions(unittest.TestCase):
         self.assertIn("test-proj", args[0])  # URL should contain 'test-proj'
         self.assertIn("snyk:lic:pip:common-lib:Unknown", args[0])  # URL should contain the issue ID
 
+    @patch("requests.post")
+    def test_process_csv_with_ignore_text_column(self, mock_requests_post):
+        # Mock CSV contents with an additional column for ignore text
+        mock_csv_data = """ISSUE_URL,IGNORE_REASON
+"https://app.snyk.io/org/test-org/project/test-proj#issue-snyk%3Alic%3Apip%3Acommon-lib%3AUnknown","Custom ignore reason"
+"""
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests_post.return_value = mock_response
+
+        with patch("builtins.open", mock_open(read_data=mock_csv_data)):
+            # Test with only ignore text column
+            process_csv(
+                file_path="fake.csv",
+                token="fake-token",
+                reason_text=None,
+                reason_type="wont-fix",
+                disregard_if_fixable=False,
+                expires=None,
+                ignore_path="*",
+                ignore_text_column="IGNORE_REASON"
+            )
+
+            # Verify the API was called with the text from the column
+            args, kwargs = mock_requests_post.call_args
+            self.assertEqual(kwargs["json"]["reason"], "Custom ignore reason")
+
+    @patch("requests.post")
+    def test_process_csv_with_combined_text(self, mock_requests_post):
+        # Mock CSV contents with an additional column for ignore text
+        mock_csv_data = """ISSUE_URL,IGNORE_REASON
+"https://app.snyk.io/org/test-org/project/test-proj#issue-snyk%3Alic%3Apip%3Acommon-lib%3AUnknown","Custom ignore reason"
+"""
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_requests_post.return_value = mock_response
+
+        with patch("builtins.open", mock_open(read_data=mock_csv_data)):
+            # Test with both text argument and ignore text column
+            process_csv(
+                file_path="fake.csv",
+                token="fake-token",
+                reason_text="Base reason:",
+                reason_type="wont-fix",
+                disregard_if_fixable=False,
+                expires=None,
+                ignore_path="*",
+                ignore_text_column="IGNORE_REASON"
+            )
+
+            # Verify the API was called with the combined text
+            args, kwargs = mock_requests_post.call_args
+            self.assertEqual(kwargs["json"]["reason"], "Base reason: Custom ignore reason")
+
 if __name__ == "__main__":
     unittest.main()

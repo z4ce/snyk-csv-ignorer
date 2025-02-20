@@ -10,6 +10,7 @@ A command-line tool to bulk ignore Snyk issues using a CSV file input. This tool
 - Path-specific ignores
 - Rate limiting handling
 - Support for disregarding issues only if they're not fixable
+- Flexible ignore reason text from command line and/or CSV columns
 
 ## Prerequisites
 
@@ -38,37 +39,59 @@ export SNYK_TOKEN='your-snyk-api-token'
 ## Usage
 
 ```bash
-./snyk_ignore_csv.py --file <path-to-csv> --text <reason-text> --type <ignore-type> [options]
+./snyk_ignore_csv.py --file <path-to-csv> [--text <reason-text>] [--ignore-text-column <column-name>] --type <ignore-type> [options]
 ```
 
 ### Required Arguments
 
 - `--file`: Path to the CSV file containing Snyk issue URLs
-- `--text`: The reason text for ignoring the issues
 - `--type`: The classification of the ignore reason (valid options: 'not-vulnerable', 'wont-fix', 'temporary-ignore')
+- At least one of:
+  - `--text`: The reason text for ignoring the issues
+  - `--ignore-text-column`: Name of the CSV column containing ignore reason text
 
 ### Optional Arguments
 
+- `--text`: The reason text for ignoring the issues (required if --ignore-text-column is not provided)
+- `--ignore-text-column`: Name of the CSV column containing ignore reason text (required if --text is not provided)
 - `--disregard-if-fixable`: Only ignore issues if no upgrade or patch is available
 - `--expires`: Timestamp (ISO 8601) when the ignore expires (e.g., 2025-12-31)
 - `--ignore-path`: Path to ignore (default: '*')
 
 ### CSV File Format
 
-The CSV file must contain a column named `ISSUE_URL` with the full Snyk issue URLs. Example:
+The CSV file must contain a column named `ISSUE_URL` with the full Snyk issue URLs. If using `--ignore-text-column`, the CSV should also include the specified column with ignore reason text. Example:
 
 ```csv
-ISSUE_URL
-https://app.snyk.io/org/my-org/project/1234abcd-5678efgh#issue-snyk%3Alic%3Apip%3Acommon-lib%3AUnknown
+ISSUE_URL,IGNORE_REASON
+https://app.snyk.io/org/my-org/project/1234abcd-5678efgh#issue-snyk%3Alic%3Apip%3Acommon-lib%3AUnknown,"Not applicable for our use case"
 ```
 
-## Example
+## Examples
 
+1. Using only command line text:
 ```bash
 ./snyk_ignore_csv.py \
   --file issues.csv \
   --text "False positive confirmed by security team" \
   --type temporary-ignore \
   --expires 2024-12-31
+```
+
+2. Using only column text:
+```bash
+./snyk_ignore_csv.py \
+  --file issues.csv \
+  --ignore-text-column "IGNORE_REASON" \
+  --type wont-fix
+```
+
+3. Combining command line and column text:
+```bash
+./snyk_ignore_csv.py \
+  --file issues.csv \
+  --text "Security team approved:" \
+  --ignore-text-column "IGNORE_REASON" \
+  --type wont-fix
 ```
 

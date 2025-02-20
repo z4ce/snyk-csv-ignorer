@@ -20,8 +20,13 @@ def parse_args():
     )
     parser.add_argument(
         "--text",
-        required=True,
+        required=False,
         help="The reason text for ignoring the issue."
+    )
+    parser.add_argument(
+        "--ignore-text-column",
+        required=False,
+        help="Name of the CSV column containing the ignore reason text."
     )
     parser.add_argument(
         "--type",
@@ -47,7 +52,13 @@ def parse_args():
         default="*",
         help="Path to ignore, default is '*'."
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    
+    # Validate that at least one of text or ignore-text-column is provided
+    if not args.text and not args.ignore_text_column:
+        parser.error("At least one of --text or --ignore-text-column must be provided")
+    
+    return args
 
 def parse_issue_id(issue_url: str) -> Optional[str]:
     """
@@ -120,6 +131,9 @@ def call_snyk_ignore_api(
         "Content-Type": "application/json"
     }
 
+    if max_retries <= 0:
+        max_retries = 1
+    
     for attempt in range(max_retries):
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 429:
@@ -135,15 +149,17 @@ def call_snyk_ignore_api(
 def process_csv(
     file_path: str,
     token: str,
-    reason_text: str,
+    reason_text: Optional[str],
     reason_type: str,
     disregard_if_fixable: bool,
     expires: Optional[str],
-    ignore_path: str
+    ignore_path: str,
+    ignore_text_column: Optional[str] = None
 ):
     """
     Read a CSV file and ignore issues in Snyk based on its contents.
     Assumes the CSV has a column named ISSUE_URL containing the full Snyk issue URL.
+    If ignore_text_column is provided, the text from that column will be used or appended to reason_text.
     """
     with open(file_path, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
@@ -162,12 +178,27 @@ def process_csv(
                 print(f"Skipping row because org_id, project_id or issue_id could not be parsed: {row}")
                 continue
 
+            # Handle the ignore text from column if specified
+            final_reason_text = reason_text or ""
+            if ignore_text_column:
+                column_text = row.get(ignore_text_column, "").strip()
+                if not column_text:
+                    print(f"Warning: Missing text in column {ignore_text_column} for row: {row}")
+                    if not reason_text:
+                        print("Skipping row due to missing ignore text")
+                        continue
+                else:
+                    if reason_text:
+                        final_reason_text = f"{reason_text} {column_text}"
+                    else:
+                        final_reason_text = column_text
+
             response = call_snyk_ignore_api(
                 org_id=org_id,
                 project_id=project_id,
                 issue_id=issue_id,
                 token=token,
-                reason_text=reason_text,
+                reason_text=final_reason_text,
                 reason_type=reason_type,
                 disregard_if_fixable=disregard_if_fixable,
                 expires=expires,
@@ -196,7 +227,8 @@ def main():
         reason_type=args.type,
         disregard_if_fixable=args.disregard_if_fixable,
         expires=args.expires,
-        ignore_path=args.ignore_path
+        ignore_path=args.ignore_path,
+        ignore_text_column=args.ignore_text_column
     )
 
 if __name__ == "__main__":
